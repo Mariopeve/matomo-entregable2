@@ -53,7 +53,7 @@ resource "kubernetes_deployment" "matomo" {
         volume {
           name = "matomo-storage"
           persistent_volume_claim {
-            claim_name = kubernetes_persistent_volume_claim.matomo_pvc.metadata[0].name
+            claim_name = "matomo-pvc"
           }
         }
       }

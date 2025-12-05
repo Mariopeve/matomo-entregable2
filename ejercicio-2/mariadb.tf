@@ -53,7 +53,7 @@ resource "kubernetes_deployment" "mariadb" {
         volume {
           name = "mariadb-storage"
           persistent_volume_claim {
-            claim_name = kubernetes_persistent_volume_claim.mariadb_pvc.metadata[0].name
+            claim_name = "mariadb-pvc"
           }
         }
       }

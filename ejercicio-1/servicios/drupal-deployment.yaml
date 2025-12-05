@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drupal
+  labels:
+    app: drupal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: drupal
+  template:
+    metadata:
+      labels:
+        app: drupal
+    spec:
+      initContainers:
+      # InitContainer 1: Copia archivos sites y crea configuración
+      - name: init-drupal-config
+        image: drupal:11
+        command: ['sh', '-c']
+        args:
+        - |
+          # Copiar todo el directorio sites
+          cp -a /var/www/html/sites/. /data/sites/ || true
+          # Crear directorio default si no existe
+          mkdir -p /data/sites/default
+          # Copiar default.settings.php
+          cp /var/www/html/sites/default/default.settings.php /data/sites/default/ || true
+          # Crear settings.php básico
+          cp /var/www/html/sites/default/default.settings.php /data/sites/default/settings.php || true
+          # Crear directorios necesarios
+          mkdir -p /data/sites/default/files
+          # Ajustar permisos
+          chown -R www-data:www-data /data/
+          chmod -R 755 /data/sites/default
+          chmod 444 /data/sites/default/settings.php
+          chmod 777 /data/sites/default/files
+        volumeMounts:
+        - name: drupal-storage
+          mountPath: /data
+      # InitContainer 2: Espera a que MySQL esté listo
+      - name: wait-mysql
+        image: mysql:8.0
+        command: ['sh', '-c']
+        args:
+        - |
+          until mysql -h drupal-mysql -u drupal -pdrupalpass drupaldb -e "SELECT 1"; do
+            echo "Esperando MySQL..."
+            sleep 5
+          done
+          echo "MySQL listo!"
+        env:
+        - name: MYSQL_PWD
+          value: "drupalpass"
+      containers:
+      - name: drupal
+        image: drupal:11
+        ports:
+        - containerPort: 80
+        env:
+        - name: DB_HOST
+          value: "drupal-mysql"
+        - name: DB_PORT
+          value: "3306"
+        - name: DB_NAME
+          value: "drupaldb"
+        - name: DB_USER
+          value: "drupal"
+        - name: DB_PASSWORD
+          value: "drupalpass"
+        volumeMounts:
+        - name: drupal-storage
+          mountPath: /var/www/html/modules
+          subPath: modules
+        - name: drupal-storage
+          mountPath: /var/www/html/profiles
+          subPath: profiles
+        - name: drupal-storage
+          mountPath: /var/www/html/sites
+          subPath: sites
+        - name: drupal-storage
+          mountPath: /var/www/html/themes
+          subPath: themes
+      volumes:
+      - name: drupal-storage
+        persistentVolumeClaim:
+          claimName: drupal-pvc
